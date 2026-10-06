@@ -1,121 +1,242 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
-void main() {
-  runApp(const MyApp());
-}
+class Pengguna {
+  final int id;
+  final String name;
+  final String email;
+  final String phone;
+  final String website;
+  final String username;
+  final String kota;
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const Pengguna({
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.phone,
+    required this.website,
+    required this.username,
+    required this.kota,
+  });
 
-  // This widget is the root of your application.
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+  factory Pengguna.fromJson(Map<String, dynamic> json) {
+    return Pengguna(
+      id: json['id'] as int,
+      name: json['name'] as String,
+      email: json['email'] as String,
+      phone: json['phone'] as String,
+      website: json['website'] as String,
+      username: json['username'] as String,
+      kota: json['address']['city'] as String,
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
+Future<List<Pengguna>> ambilPengguna() async {
+  final uri = Uri.parse('https://jsonplaceholder.typicode.com/users');
+  final response = await http.get(uri).timeout(const Duration(seconds: 10));
+  if (response.statusCode != 200) {
+    throw Exception('Gagal memuat data (kode ${response.statusCode})');
+  }
+  final List<dynamic> data = jsonDecode(response.body);
+  return data.map((e) => Pengguna.fromJson(e as Map<String, dynamic>)).toList();
+  // return <Pengguna>[];
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+void main() => runApp(const MyApp());
 
-  void _incrementCounter() {
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Praktikum 4',
+      theme: ThemeData(colorSchemeSeed: Colors.blue, useMaterial3: true),
+      home: const PenggunaPage(),
+    );
+  }
+}
+
+Future<String> ambilSalam() async {
+  await Future.delayed(const Duration(seconds: 2));
+  return 'Halo dari masa depan!';
+}
+
+class SalamPage extends StatefulWidget {
+  const SalamPage({super.key});
+
+  @override
+  State<SalamPage> createState() => _SalamPageState();
+}
+
+class _SalamPageState extends State<SalamPage> {
+  late Future<String> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = ambilSalam();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Demo Future')),
+      body: Center(
+        child: FutureBuilder<String>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const CircularProgressIndicator();
+            }
+            if (snapshot.hasError) {
+              return Text('Error: ${snapshot.error}');
+            }
+            return Text(snapshot.data!, style: const TextStyle(fontSize: 24));
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class PenggunaPage extends StatefulWidget {
+  const PenggunaPage({super.key});
+
+  @override
+  State<PenggunaPage> createState() => _PenggunaPageState();
+}
+
+class _PenggunaPageState extends State<PenggunaPage> {
+  late Future<List<Pengguna>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = ambilPengguna();
+  }
+
+  void _muatUlang() {
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _future = ambilPengguna();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
+        title: FutureBuilder<List<Pengguna>>(
+          future: _future,
+          builder: (context, s) => Text(
+            s.hasData ? 'Daftar Pengguna (${s.data!.length})' : 'Daftar Pengguna',
+          ),
         ),
+        actions: [
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _muatUlang),
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+      body: FutureBuilder<List<Pengguna>>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: Colors.red,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Terjadi kesalahan:\n${snapshot.error}',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: _muatUlang,
+                      child: const Text('Coba lagi'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          final data = snapshot.data!;
+          if (data.isEmpty) {
+            return const Center(child: Text('Tidak ada data'));
+          }
+          return RefreshIndicator(
+            onRefresh: () async => _muatUlang,
+            child: ListView.builder(
+              itemCount: data.length,
+              itemBuilder: (context, i) {
+                final p = data[i];
+                return ListTile(
+                  leading: CircleAvatar(child: Text(p.name[0])),
+                  title: Text(p.name),
+                  subtitle: Text(p.email),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DetailPenggunaPage(pengguna: p),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class DetailPenggunaPage extends StatelessWidget {
+  final Pengguna pengguna;
+
+  const DetailPenggunaPage({super.key, required this.pengguna});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(pengguna.name)),
+      body: ListView(
+        children: [
+          ListTile(
+            leading: const Icon(Icons.email),
+            title: Text(pengguna.email),
+          ),
+          ListTile(
+            leading: const Icon(Icons.phone),
+            title: Text(pengguna.phone),
+          ),
+          ListTile(
+            leading: const Icon(Icons.language),
+            title: Text(pengguna.website),
+          ),
+          ListTile(
+            leading: const Icon(Icons.location_city),
+            title: Text(pengguna.kota),
+          ),
+          ListTile(
+            leading: const Icon(Icons.person),
+            title: Text(pengguna.username),
+          ),
+        ],
       ),
     );
   }
