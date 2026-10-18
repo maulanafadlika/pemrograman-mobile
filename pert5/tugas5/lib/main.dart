@@ -1,121 +1,440 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path/path.dart' as p;
+import 'package:sqflite/sqflite.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() => runApp(const MyApp());
+
+const kategoriList = [
+  'Makanan',
+  'Transportasi',
+  'Hiburan',
+  'Belanja',
+  'Lainnya',
+];
+
+String formatRupiah(int nilai) {
+  final s = nilai.toString();
+  final buf = StringBuffer();
+  for (var i = 0; i < s.length; i++) {
+    final posDariKanan = s.length - i;
+    buf.write(s[i]);
+    if (posDariKanan > 1 && posDariKanan % 3 == 1) buf.write('.');
+  }
+  return 'Rp $buf';
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      title: 'Pencatat Pengeluaran',
+      home: const PengeluaranPage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+class Pengeluaran {
+  final int? id;
+  final String nama;
+  final int jumlah;
+  final String kategori;
+  final String tanggal;
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
+  const Pengeluaran({
+    this.id,
+    required this.nama,
+    required this.jumlah,
+    required this.kategori,
+    required this.tanggal,
+  });
 
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
+  Map<String, Object?> toMap() => {
+    'id': id,
+    'nama': nama,
+    'jumlah': jumlah,
+    'kategori': kategori,
+    'tanggal': tanggal,
+  };
 
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  factory Pengeluaran.fromMap(Map<String, Object?> m) => Pengeluaran(
+    id: m['id'] as int,
+    nama: m['nama'] as String,
+    jumlah: m['jumlah'] as int,
+    kategori: m['kategori'] as String,
+    tanggal: m['tanggal'] as String,
+  );
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class DbHelper {
+  static Database? _db;
 
-  void _incrementCounter() {
+  static Future<Database> get database async {
+    if (_db != null) return _db!;
+    final path = p.join(await getDatabasesPath(), 'pengeluaran.db');
+    _db = await openDatabase(
+      path,
+      version: 1,
+      onCreate: (db, version) {
+        return db.execute(
+          'CREATE TABLE pengeluaran('
+          'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+          'nama TEXT NOT NULL, '
+          'jumlah INTEGER NOT NULL, '
+          'kategori TEXT NOT NULL, '
+          'tanggal TEXT NOT NULL)',
+        );
+      },
+    );
+    return _db!;
+  }
+
+  static Future<int> tambah(Pengeluaran p) async {
+    final db = await database;
+    return db.insert('pengeluaran', p.toMap());
+  }
+
+  static Future<List<Pengeluaran>> semua({String kategori = 'Semua'}) async {
+    final db = await database;
+    final rows = await db.query(
+      'pengeluaran',
+      where: kategori == 'Semua' ? null : 'kategori = ?',
+      whereArgs: kategori == 'Semua' ? null : [kategori],
+      orderBy: 'tanggal DESC, id DESC',
+    );
+    return rows.map(Pengeluaran.fromMap).toList();
+  }
+
+  static Future<int> totalSemua({String kategori = 'Semua'}) async {
+    final db = await database;
+    final rows = await db.rawQuery(
+      'SELECT SUM(jumlah) as total FROM pengeluaran '
+      '${kategori == 'Semua' ? '' : 'WHERE kategori = ?'}',
+      kategori == 'Semua' ? [] : [kategori],
+    );
+    return (rows.first['total'] as int?) ?? 0;
+  }
+
+  static Future<int> ubah(Pengeluaran p) async {
+    final db = await database;
+    return db.update(
+      'pengeluaran',
+      p.toMap(),
+      where: 'id = ?',
+      whereArgs: [p.id],
+    );
+  }
+
+  static Future<int> hapus(int id) async {
+    final db = await database;
+    return db.delete('pengeluaran', where: 'id = ?', whereArgs: [id]);
+  }
+}
+
+class PengeluaranPage extends StatefulWidget {
+  const PengeluaranPage({super.key});
+
+  @override
+  State<PengeluaranPage> createState() => _PengeluaranPageState();
+}
+
+class _PengeluaranPageState extends State<PengeluaranPage> {
+  late Future<List<Pengeluaran>> _future;
+  int _total = 0;
+  String _filterKategori = 'Semua';
+
+  @override
+  void initState() {
+    super.initState();
+    _future = DbHelper.semua();
+    _muatFilterTersimpan();
+  }
+
+  Future<void> _muatFilterTersimpan() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _filterKategori = prefs.getString('filterKategori') ?? 'Semua';
     });
+    _muat();
+  }
+
+  Future<void> _ubahFilter(String? nilai) async {
+    if (nilai == null) return;
+    setState(() => _filterKategori = nilai);
+    _muat();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('filterKategori', nilai);
+  }
+
+  void _muat() {
+    setState(() {
+      _future = DbHelper.semua(kategori: _filterKategori);
+    });
+    DbHelper.totalSemua(kategori: _filterKategori).then((t) {
+      if (!mounted) return;
+      setState(() => _total = t);
+    });
+  }
+
+  Future<void> _buka([Pengeluaran? item]) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => FormPengeluaranPage(pengeluaran: item)),
+    );
+    if (!mounted) return;
+    _muat();
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+      appBar: AppBar(title: const Text('Pencatat Pengeluaran')),
+      body: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            color: Theme.of(context).colorScheme.primaryContainer,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _filterKategori == 'Semua'
+                      ? 'Total pengeluaran'
+                      : 'Total ($_filterKategori)',
+                  style: const TextStyle(fontSize: 14),
+                ),
+                Text(
+                  formatRupiah(_total),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: DropdownButtonFormField<String>(
+              key: ValueKey(_filterKategori),
+              initialValue: _filterKategori,
+              decoration: const InputDecoration(
+                labelText: 'Filter kategori',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                'Semua',
+                ...kategoriList,
+              ].map((k) => DropdownMenuItem(value: k, child: Text(k))).toList(),
+              onChanged: _ubahFilter,
+            ),
+          ),
+          Expanded(
+            child: FutureBuilder<List<Pengeluaran>>(
+              future: _future,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(child: Text('Galat: ${snapshot.error}'));
+                }
+                final data = snapshot.data ?? [];
+                if (data.isEmpty) {
+                  return const Center(child: Text('Belum ada pengeluaran'));
+                }
+                return ListView.builder(
+                  itemCount: data.length,
+                  itemBuilder: (context, i) {
+                    final item = data[i];
+                    return ListTile(
+                      title: Text(item.nama),
+                      subtitle: Text('${item.kategori} • ${item.tanggal}'),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(formatRupiah(item.jumlah)),
+                          IconButton(
+                            icon: const Icon(Icons.delete),
+                            onPressed: () async {
+                              final yakin = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Hapus pengeluaran ini?'),
+                                  content: Text(item.nama),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(ctx, false),
+                                      child: const Text('Batal'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx, true),
+                                      child: const Text('Hapus'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (yakin != true) return;
+                              await DbHelper.hapus(item.id!);
+                              if (!mounted) return;
+                              _muat();
+                            },
+                          ),
+                        ],
+                      ),
+                      onTap: () => _buka(item),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
+        onPressed: () => _buka(),
         child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+class FormPengeluaranPage extends StatefulWidget {
+  final Pengeluaran? pengeluaran;
+
+  const FormPengeluaranPage({super.key, this.pengeluaran});
+
+  @override
+  State<FormPengeluaranPage> createState() => _FormPengeluaranPageState();
+}
+
+class _FormPengeluaranPageState extends State<FormPengeluaranPage> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nama;
+  late final TextEditingController _jumlah;
+  late String _kategori;
+  late DateTime _tanggal;
+
+  @override
+  void initState() {
+    super.initState();
+    _nama = TextEditingController(text: widget.pengeluaran?.nama ?? '');
+    _jumlah = TextEditingController(
+      text: widget.pengeluaran != null
+          ? widget.pengeluaran!.jumlah.toString()
+          : '',
+    );
+    _kategori = widget.pengeluaran?.kategori ?? kategoriList.first;
+    _tanggal = widget.pengeluaran != null
+        ? DateTime.parse(widget.pengeluaran!.tanggal)
+        : DateTime.now();
+  }
+
+  @override
+  void dispose() {
+    _nama.dispose();
+    _jumlah.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pilihTanggal() async {
+    final hasil = await showDatePicker(
+      context: context,
+      initialDate: _tanggal,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (hasil == null) return;
+    setState(() => _tanggal = hasil);
+  }
+
+  Future<void> _simpan() async {
+    if (!_formKey.currentState!.validate()) return;
+    final item = Pengeluaran(
+      id: widget.pengeluaran?.id,
+      nama: _nama.text.trim(),
+      jumlah: int.parse(_jumlah.text.trim()),
+      kategori: _kategori,
+      tanggal: _tanggal.toIso8601String().substring(0, 10),
+    );
+    if (widget.pengeluaran == null) {
+      await DbHelper.tambah(item);
+    } else {
+      await DbHelper.ubah(item);
+    }
+    if (!mounted) return;
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final baru = widget.pengeluaran == null;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(baru ? 'Pengeluaran Baru' : 'Ubah Pengeluaran'),
+      ),
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            TextFormField(
+              controller: _nama,
+              decoration: const InputDecoration(
+                labelText: 'Nama pengeluaran',
+                border: OutlineInputBorder(),
+              ),
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Nama wajib diisi' : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _jumlah,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Jumlah (Rp)',
+                border: OutlineInputBorder(),
+              ),
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'Jumlah wajib diisi';
+                final n = int.tryParse(v.trim());
+                if (n == null) return 'Jumlah harus berupa angka';
+                if (n <= 0) return 'Jumlah harus lebih dari 0';
+                return null;
+              },
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: _kategori,
+              decoration: const InputDecoration(
+                labelText: 'Kategori',
+                border: OutlineInputBorder(),
+              ),
+              items: kategoriList
+                  .map((k) => DropdownMenuItem(value: k, child: Text(k)))
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) setState(() => _kategori = v);
+              },
+              validator: (v) => v == null ? 'Kategori wajib dipilih' : null,
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Tanggal'),
+              subtitle: Text(_tanggal.toIso8601String().substring(0, 10)),
+              trailing: const Icon(Icons.calendar_today),
+              onTap: _pilihTanggal,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(onPressed: _simpan, child: const Text('Simpan')),
+          ],
+        ),
       ),
     );
   }
