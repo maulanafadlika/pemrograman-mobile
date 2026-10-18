@@ -1,121 +1,375 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-void main() {
+final themeMode = ValueNotifier<ThemeMode>(ThemeMode.light);
+final seedColor = ValueNotifier<Color>(Colors.indigo);
+const pilihanWarna = <Color>[
+  Colors.indigo,
+  Colors.teal,
+  Colors.deepOrange,
+  Colors.pink,
+];
+
+ThemeData buatTema(Color seed, Brightness brightness) {
+  return ThemeData(
+    useMaterial3: true,
+    colorSchemeSeed: seed,
+    brightness: brightness,
+    appBarTheme: const AppBarTheme(centerTitle: true),
+  );
+}
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final prefs = await SharedPreferences.getInstance();
+
+  final gelap = prefs.getBool('gelap') ?? false;
+  final idxWarna = prefs.getInt('warna') ?? 0;
+  themeMode.value = gelap ? ThemeMode.dark : ThemeMode.light;
+  seedColor.value = pilihanWarna[idxWarna];
+
+  themeMode.addListener(() {
+    prefs.setBool('gelap', themeMode.value == ThemeMode.dark);
+  });
+  seedColor.addListener(() {
+    prefs.setInt('warna', pilihanWarna.indexOf(seedColor.value));
+  });
+
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+    return ListenableBuilder(
+      listenable: Listenable.merge([themeMode, seedColor]),
+      builder: (context, _) {
+        return MaterialApp(
+          title: 'Praktikum 6',
+          debugShowCheckedModeBanner: false,
+          theme: buatTema(seedColor.value, Brightness.light),
+          darkTheme: buatTema(seedColor.value, Brightness.dark),
+          themeMode: themeMode.value,
+          initialRoute: '/',
+          routes: {'/': (_) => Scaffold(body: const ShellPage())},
+          onGenerateRoute: (settings) {
+            if (settings.name == '/detail') {
+              final item = settings.arguments as Item;
+              return PageRouteBuilder(
+                settings: settings,
+                transitionDuration: const Duration(milliseconds: 400),
+                pageBuilder: (_, _, _) => DetailPage(item: item),
+                transitionsBuilder: (_, anim, _, child) {
+                  return FadeTransition(opacity: anim, child: child);
+                },
+              );
+            }
+            return null;
+          },
+          onUnknownRoute: (settings) => MaterialPageRoute(
+            builder: (_) => Scaffold(
+              appBar: AppBar(title: const Text('404')),
+              body: Center(
+                child: Text(
+                  '404 - Halaman tidak ditemukan\n${settings.name}',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class PengaturanTab extends StatelessWidget {
+  const PengaturanTab({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([themeMode, seedColor]),
+      builder: (context, _) {
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            SwitchListTile(
+              title: const Text('Mode gelap'),
+              value: themeMode.value == ThemeMode.dark,
+              onChanged: (v) {
+                themeMode.value = v ? ThemeMode.dark : ThemeMode.light;
+              },
+            ),
+            const SizedBox(height: 8),
+            Text('Warna tema', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 12,
+              children: [
+                for (final c in pilihanWarna)
+                  GestureDetector(
+                    onTap: () => seedColor.value = c,
+                    child: CircleAvatar(
+                      backgroundColor: c,
+                      child: seedColor.value == c
+                          ? const Icon(Icons.check, color: Colors.white)
+                          : null,
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class Item {
+  final String nama;
+  final IconData ikon;
+  final Color warna;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  const Item(this.nama, this.ikon, this.warna);
+}
+
+const daftarItem = [
+  Item('Flutter', Icons.flutter_dash, Colors.blue),
+  Item('Musik', Icons.music_note, Colors.pink),
+  Item('Kamera', Icons.camera_alt, Colors.orange),
+  Item('Peta', Icons.map, Colors.green),
+];
+
+class BerandaTab extends StatelessWidget {
+  const BerandaTab({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      itemCount: daftarItem.length,
+      itemBuilder: (context, i) {
+        final item = daftarItem[i];
+        return ListTile(
+          leading: Hero(
+            tag: 'ikon-${item.nama}',
+            child: CircleAvatar(
+              backgroundColor: item.warna,
+              child: Icon(item.ikon, color: Colors.white),
+            ),
+          ),
+          title: Text(item.nama),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () {
+            Navigator.pushNamed(context, '/detail', arguments: item);
+          },
+        );
+      },
+    );
+  }
+}
+
+class DetailPage extends StatelessWidget {
+  final Item item;
+
+  const DetailPage({super.key, required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final tema = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(title: Text(item.nama)),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Hero(
+              tag: 'ikon-${item.nama}',
+              child: CircleAvatar(
+                radius: 64,
+                backgroundColor: item.warna,
+                child: Icon(item.ikon, size: 64, color: Colors.white),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(item.nama, style: tema.textTheme.headlineMedium),
+            Text('Detail untuk ${item.nama}', style: tema.textTheme.bodyMedium),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class AnimasiTab extends StatefulWidget {
+  const AnimasiTab({super.key});
+
+  @override
+  State<AnimasiTab> createState() => _AnimasiTabState();
+}
+
+class _AnimasiTabState extends State<AnimasiTab>
+    with SingleTickerProviderStateMixin {
+  bool _besar = false;
+  int _hitung = 0;
+  bool _tampil = true;
+  late final AnimationController _putar;
+
+  @override
+  void initState() {
+    super.initState();
+    _putar = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _putar.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+    final tema = Theme.of(context);
+    final warna = tema.colorScheme;
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text('1. AnimatedContainer', style: tema.textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Center(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeInOut,
+            width: _besar ? 200 : 100,
+            height: 100,
+            decoration: BoxDecoration(
+              color: _besar ? warna.primary : warna.tertiary,
+              borderRadius: BorderRadius.circular(_besar ? 50 : 8),
             ),
+          ),
+        ),
+        TextButton(
+          onPressed: () => setState(() => _besar = !_besar),
+          child: const Text('Ubah bentuk'),
+        ),
+        const Divider(),
+        Text('2. AnimatedSwitcher', style: tema.textTheme.titleMedium),
+        Center(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            transitionBuilder: (child, anim) {
+              return ScaleTransition(scale: anim, child: child);
+            },
+            child: Text(
+              '$_hitung',
+              key: ValueKey(_hitung),
+              style: tema.textTheme.displayMedium,
+            ),
+          ),
+        ),
+        TextButton(
+          onPressed: () => setState(() => _hitung++),
+          child: const Text('Tambah'),
+        ),
+        const Divider(),
+        Text('3. AnimationController', style: tema.textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Center(
+          child: RotationTransition(
+            turns: _putar,
+            child: Icon(Icons.settings, size: 64, color: warna.primary),
+          ),
+        ),
+        TextButton(
+          onPressed: () {
+            if (_putar.isAnimating) {
+              _putar.stop();
+            } else {
+              _putar.repeat();
+            }
+            setState(() {});
+          },
+          child: Text(_putar.isAnimating ? 'Berhenti' : 'Putar'),
+        ),
+
+      const Divider(),
+      Text('4. AnimatedOpacity', style: tema.textTheme.titleMedium),
+      const SizedBox(height: 8),
+      AnimatedOpacity(
+        opacity: _tampil ? 1 : 0,
+        duration: const Duration(milliseconds: 500),
+        child: Card(
+          child: ListTile(
+            leading: Icon(Icons.star, color: warna.primary),
+            title: const Text('Kartu ini bisa memudar'),
+          ),
+        ),
+      ),
+      TextButton(
+        onPressed: () => setState(() => _tampil = !_tampil),
+        child: Text(_tampil ? 'Sembunyikan' : 'Tampilkan'),
+      ),
+    ]
+    );
+  }
+}
+
+class ShellPage extends StatefulWidget {
+  const ShellPage({super.key});
+
+  @override
+  State<ShellPage> createState() => _ShellPageState();
+}
+
+class _ShellPageState extends State<ShellPage> {
+  int _index = 0;
+  static const _ikon = [Icons.home, Icons.animation, Icons.settings];
+  static const _halaman = [BerandaTab(), AnimasiTab(), PengaturanTab()];
+  static const _judul = ['Beranda', 'Animasi', 'Pengaturan'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(_judul[_index])),
+      drawer: Drawer(
+        child: ListView(
+          children: [
+            const DrawerHeader(child: Text('Menu')),
+            for (var i = 0; i < _judul.length; i++)
+              ListTile(
+                leading: Icon(_ikon[i]),
+                title: Text(_judul[i]),
+                selected: _index == i,
+                onTap: () {
+                  setState(() => _index = i);
+                  Navigator.pop(context);
+                },
+              ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+      body: IndexedStack(index: _index, children: _halaman),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _index,
+        onDestinationSelected: (i) => setState(() => _index = i),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Beranda',
+          ),
+          NavigationDestination(icon: Icon(Icons.animation), label: 'Animasi'),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings),
+            label: 'Pengaturan',
+          ),
+        ],
       ),
     );
   }
