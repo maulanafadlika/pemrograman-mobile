@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const profilNama = 'Fadlika';
+const profilNama = 'Fadlika Maulana';
 const profilNim = '20230801194';
 const profilJurusan = 'Teknik Informatika';
 const profilBio = 'Mahasiswa yang suka mengaji.';
@@ -40,16 +40,9 @@ const daftarProyek = [
     judul: 'Bank Sampah',
     kategori: 'Web',
     deskripsi:
-    'Aplikasi manajemen bank sampah: setoran sampah, saldo nasabah, dan laporan.',
+        'Aplikasi manajemen bank sampah: setoran sampah, saldo nasabah, dan laporan.',
     ikon: Icons.recycling,
     teknologi: ['Laravel', 'Livewire', 'MySQL'],
-  ),
-  Proyek(
-    judul: 'REST API Produk',
-    kategori: 'Backend',
-    deskripsi: 'API CRUD produk dengan panel admin Filament di dalam Docker.',
-    ikon: Icons.api,
-    teknologi: ['Laravel', 'Filament', 'Docker'],
   ),
   Proyek(
     judul: 'Dashboard Web',
@@ -61,12 +54,13 @@ const daftarProyek = [
   Proyek(
     judul: 'Iron Track',
     kategori: 'Mobile',
-    deskripsi: 'Aplikasi mobile pelacakan siklus menstruasi, pemantauan anemia, dan konsultasi AI kesehatan..',
+    deskripsi:
+        'Aplikasi mobile pelacakan siklus menstruasi, pemantauan anemia, dan konsultasi AI kesehatan..',
     ikon: Icons.bloodtype,
     teknologi: ['Flutter', 'Provider'],
   ),
   Proyek(
-    judul: 'Catatan Saya',
+    judul: 'Bank Sampah Mobile',
     kategori: 'Mobile',
     deskripsi: 'Aplikasi catatan offline dengan database SQLite.',
     ikon: Icons.note_alt,
@@ -218,9 +212,10 @@ class _ProfilTabState extends State<ProfilTab>
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
-    _skala = Tween<double>(begin: 0.95, end: 1.05).animate(
-      CurvedAnimation(parent: _denyut, curve: Curves.easeInOut),
-    );
+    _skala = Tween<double>(
+      begin: 0.95,
+      end: 1.05,
+    ).animate(CurvedAnimation(parent: _denyut, curve: Curves.easeInOut));
   }
 
   @override
@@ -442,9 +437,7 @@ class DetailProyekPage extends StatelessWidget {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: [
-              for (final t in proyek.teknologi) Chip(label: Text(t)),
-            ],
+            children: [for (final t in proyek.teknologi) Chip(label: Text(t))],
           ),
         ],
       ),
