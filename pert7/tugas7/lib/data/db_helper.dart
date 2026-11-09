@@ -1,5 +1,3 @@
-// Akses SQLite: CRUD tabel kegiatan, pencarian, dan query laporan
-// (ringkasan, per kategori, per hari, bulanan).
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
@@ -7,8 +5,6 @@ import 'package:sqflite/sqflite.dart';
 import '../models/kegiatan.dart';
 import '../utils/format.dart';
 
-/// Dinaikkan setiap tambah/ubah/hapus. Halaman yang menampilkan data
-/// mendengarkannya (addListener) lalu memuat ulang datanya.
 final versiData = ValueNotifier<int>(0);
 
 class DbHelper {
@@ -44,7 +40,6 @@ class DbHelper {
     return id;
   }
 
-  /// Semua kegiatan pada satu tanggal; yang belum selesai di atas.
   static Future<List<Kegiatan>> pada(String tanggal) async {
     final db = await _database;
     final hasil = await db.query(
@@ -73,9 +68,6 @@ class DbHelper {
     _beritahu();
   }
 
-  /// Pencarian lintas tanggal: [kata] dicocokkan ke judul dengan LIKE,
-  /// [tipe] dan [kategori] menjadi syarat WHERE tambahan bila diisi.
-  /// Hasil terbaru di atas.
   static Future<List<Kegiatan>> cari({
     String kata = '',
     Tipe? tipe,
@@ -106,11 +98,6 @@ class DbHelper {
     return hasil.map(Kegiatan.fromMap).toList();
   }
 
-  // ---------- Query laporan ----------
-
-  // Kolom ringkasan dipakai bersama oleh ringkasan() dan ringkasanPerHari().
-  // CASE WHEN memilah pemasukan/pengeluaran; COALESCE mengganti NULL
-  // (saat tidak ada data) dengan 0.
   static const _kolomRingkasan = '''
     COUNT(*) AS jumlah,
     COALESCE(SUM(selesai), 0) AS selesai,
@@ -134,9 +121,6 @@ class DbHelper {
     return _keRingkasan(hasil.first);
   }
 
-  /// Total pengeluaran per kategori dari [dari] s.d. [sampai] (bawaan: satu
-  /// hari saja), terbesar dulu. Tanggal yyyy-MM-dd bisa dibandingkan sebagai
-  /// teks, jadi BETWEEN langsung bekerja.
   static Future<Map<String, int>> pengeluaranPerKategori(
     String dari, [
     String? sampai,
@@ -155,8 +139,6 @@ class DbHelper {
     return {for (final b in hasil) b['kategori'] as String: b['total'] as int};
   }
 
-  /// Ringkasan setiap hari dari [dari] s.d. [sampai], urut dari yang terlama.
-  /// Hari tanpa kegiatan tetap ada dengan nilai 0.
   static Future<Map<String, Ringkasan>> ringkasanPerHari(
     String dari,
     String sampai,
@@ -190,20 +172,17 @@ class DbHelper {
     };
   }
 
-  /// Ringkasan 7 hari yang berakhir di [sampai].
   static Future<Map<String, Ringkasan>> tujuhHari(String sampai) {
     final akhir = dariTanggalDb(sampai);
     final dari = DateTime(akhir.year, akhir.month, akhir.day - 6);
     return ringkasanPerHari(keTanggalDb(dari), sampai);
   }
 
-  /// Laporan arus kas satu bulan (lihat class LaporanBulanan).
   static Future<LaporanBulanan> laporanBulanan(int tahun, int bulan) async {
     final dari = keTanggalDb(DateTime(tahun, bulan, 1));
     final sampai = keTanggalDb(DateTime(tahun, bulan + 1, 0)); // hari terakhir
     final db = await _database;
 
-    // Saldo awal = akumulasi (pemasukan - pengeluaran) sebelum bulan ini.
     final saldo = await db.rawQuery(
       '''
       SELECT COALESCE(SUM(CASE WHEN tipe = 'pemasukan' THEN nominal
@@ -215,7 +194,6 @@ class DbHelper {
       [dari],
     );
 
-    // Penerimaan dikelompokkan per sumber (judul kegiatan pemasukan).
     final masuk = await db.rawQuery(
       '''
       SELECT judul, SUM(nominal) AS total
