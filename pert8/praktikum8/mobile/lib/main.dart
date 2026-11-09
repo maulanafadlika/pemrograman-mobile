@@ -6,6 +6,7 @@ import 'pages/cari_page.dart';
 import 'pages/form_kegiatan_page.dart';
 import 'pages/shell_page.dart';
 import 'state/pengaturan.dart';
+import 'pages/status_server_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,6 +35,7 @@ class TabungKuApp extends StatelessWidget {
           localizationsDelegates: GlobalMaterialLocalizations.delegates,
           initialRoute: '/',
           routes: {
+            '/status': (context) => const StatusServerPage(),
             '/': (context) => const ShellPage(),
             '/form': (context) => const FormKegiatanPage(),
             '/cari': (context) => const CariPage(),

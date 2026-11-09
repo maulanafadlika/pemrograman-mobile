@@ -83,9 +83,17 @@ class _PengaturanPageState extends State<PengaturanPage> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Text(
                   'Kartu ringkasan membandingkan tabungan harian '
-                  'dengan target ini.',
+                      'dengan target ini.',
                   style: teks.bodySmall,
                 ),
+              ),
+              const Divider(height: 32),
+              const _JudulBagian('Server'),
+              ListTile(
+                leading: const Icon(Icons.dns),
+                title: const Text('Status server'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.pushNamed(context, '/status'),
               ),
             ],
           );
